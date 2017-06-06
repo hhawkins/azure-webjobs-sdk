@@ -521,7 +521,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             {
                 var functionContext = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, invokeParameters, logger);
                 var cancellationToken = functionCancellationTokenSource.Token;
-                await invokeFilter.OnExecutingAsync(functionContext, cancellationToken);
+                await invokeFilter.OnPreFunctionInvocation(functionContext, cancellationToken);
             }
 
             // if the function is a Singleton, aquire the lock
@@ -566,7 +566,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             {
                 var functionContext = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, invokeParameters, logger);
                 var cancellationToken = functionCancellationTokenSource.Token;
-                await invokeFilter.OnActionExecuted(functionContext, cancellationToken);
+                await invokeFilter.OnPostFunctionInvocation(functionContext, cancellationToken);
             }
         }
 

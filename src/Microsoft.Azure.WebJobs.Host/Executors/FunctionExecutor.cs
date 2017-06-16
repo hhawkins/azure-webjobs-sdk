@@ -558,7 +558,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
                 await singleton.ReleaseAsync(functionCancellationTokenSource.Token);
             }
         }
-
+        
         internal static async Task InvokeAsync(IFunctionInvoker invoker, ParameterHelper parameterHelper, CancellationTokenSource timeoutTokenSource,
             CancellationTokenSource functionCancellationTokenSource, bool throwOnTimeout, TimeSpan timerInterval, IFunctionInstance instance, ILogger logger, JobHost host = null)
         {
@@ -575,9 +575,18 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             // Where the invocation filter attribute functionality is currently temporarily placed
             var functionMethod = instance.FunctionDescriptor.Method;
             var invokeFilter = functionMethod.GetCustomAttribute<InvocationFilterAttribute>();
+            
+            var parameters = new Dictionary<string, object>();
+            string[] pnames = parameterNames.ToArray<string>();
+
+            for (var i = 0; i < invokeParameters.Length; i++)
+            {
+                parameters.Add(pnames[i], invokeParameters[i]);
+            }
+
             if (invokeFilter != null)
             {
-                var functionExecutingContext = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, invokeParameters, logger);
+                var functionExecutingContext = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, host);
                 var cancellationToken = functionCancellationTokenSource.Token;
                 try
                 {
@@ -593,7 +602,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             var invokeFunction = functionMethod.GetCustomAttribute<InvokeFunctionFilterAttribute>();
             if (invokeFunction != null)
             {
-                var functionContext = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, invokeParameters, logger, host);
+                var functionContext = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, host);
                 var cancellationToken = functionCancellationTokenSource.Token;
                 try
                 {
@@ -637,7 +646,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
                 // Where the invocation filter attribute functionality is currently temporarily placed
                 if (invokeFilter != null)
                 {
-                    var functionExecutingContext = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, invokeParameters, logger, functionResult);
+                    var functionExecutingContext = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, functionResult);
                     var cancellationToken = functionCancellationTokenSource.Token;
                     try
                     {

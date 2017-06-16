@@ -598,7 +598,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
                 }
             }
 
-            // Where invoke function is currently temporarily placed
+            // Where invoke function is currently placed
             var invokeFunction = functionMethod.GetCustomAttribute<InvokeFunctionFilterAttribute>();
             if (invokeFunction != null)
             {
@@ -643,7 +643,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             }
             finally
             {
-                // Where the invocation filter attribute functionality is currently temporarily placed
+                // Where the invocation filter attribute functionality is currently placed
                 if (invokeFilter != null)
                 {
                     var functionExecutingContext = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, functionResult);

@@ -23,7 +23,7 @@ namespace Microsoft.Azure.WebJobs
     /// A <see cref="JobHost"/> is the execution container for jobs. Once started, the
     /// <see cref="JobHost"/> will manage and run job functions when they are triggered.
     /// </summary>
-    public class JobHost : IDisposable
+    public class JobHost : IDisposable, IJobMethodInvoker
     {
         private const int StateNotStarted = 0;
         private const int StateStarting = 1;
@@ -376,6 +376,18 @@ namespace Microsoft.Azure.WebJobs
             {
                 throw new ObjectDisposedException(null);
             }
+        }
+        
+        /// <summary>
+        /// Method to invoke a new method
+        /// </summary>
+        /// <param name="method"></param>
+        /// <param name="parameters"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public Task JobInvokeAsync(string method, IDictionary<string, object> parameters, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
         }
     }
 }

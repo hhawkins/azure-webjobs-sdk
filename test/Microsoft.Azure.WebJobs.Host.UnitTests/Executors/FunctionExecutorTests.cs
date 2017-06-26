@@ -289,7 +289,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
             shutdownSource.CancelAfter(500);
             timeoutSource.CancelAfter(timeoutInterval);
             var ex = await Assert.ThrowsAsync<FunctionTimeoutException>(() => FunctionExecutor.InvokeAsync(mockInvoker.Object, parameters, timeoutSource, shutdownSource,
-                 throwOnTimeout, timeoutInterval, _mockFunctionInstance.Object, null));
+                 throwOnTimeout, timeoutInterval, _mockFunctionInstance.Object));
 
             var expectedMessage = string.Format("Timeout value of {0} was exceeded by function: {1}", timeoutInterval, _mockFunctionInstance.Object.FunctionDescriptor.ShortName);
             Assert.Equal(expectedMessage, ex.Message);

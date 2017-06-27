@@ -655,14 +655,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             }
             finally
             {
-                try
-                {
-                    await InvokeExecutedFilters(invoker, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, functionResult, parameterNames);
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e.ToDetails());
-                }
+                await InvokeExecutedFilters(invoker, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, functionResult, parameterNames);
             }
         }
 

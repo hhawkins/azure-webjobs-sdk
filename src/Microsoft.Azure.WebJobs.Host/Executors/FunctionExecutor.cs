@@ -238,8 +238,8 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
 
                     // Must bind before logging (bound invoke string is included in log message).
                     FunctionBindingContext functionContext = new FunctionBindingContext(
-                        instance.Id, 
-                        functionCancellationTokenSource.Token, 
+                        instance.Id,
+                        functionCancellationTokenSource.Token,
                         traceWriter,
                         instance.FunctionDescriptor);
                     var valueBindingContext = new ValueBindingContext(functionContext, cancellationToken);
@@ -571,7 +571,8 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             //      b. If !throwOnTimeout, wait for the task to complete.
 
             await InvokeExecutingFilters(invoker, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, parameterNames);
-            
+            Dictionary<string, IFunctionInvocationFilter[]> sortedFilters = SortFilters();
+
             // Start the invokeTask.
             Task invokeTask = invoker.InvokeAsync(invokeParameters);
 
@@ -603,6 +604,20 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             {
                 await InvokeExecutedFilters(invoker, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, functionResult, parameterNames);
             }
+        }
+
+        private static Dictionary<string, IFunctionInvocationFilter[]> SortFilters()
+        {
+            IFunctionInvocationFilter[] executingFilters = null;
+            IFunctionInvocationFilter[] executedFilters = null;
+
+            // TODO: Add filter sorting
+
+            return new Dictionary<string, IFunctionInvocationFilter[]>()
+            {
+                { "executingFilters", executingFilters },
+                { "executedFilters", executedFilters }
+            };
         }
 
         private static async Task InvokeExecutingFilters(IFunctionInvoker invoker, object[] invokeParameters, CancellationTokenSource functionCancellationTokenSource,
@@ -654,15 +669,15 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             CancellationToken cancellationToken = functionCancellationTokenSource.Token;
             var invokeFilters = functionMethod.GetCustomAttributes().OfType<InvocationFilterAttribute>();
 
-            var parameters = new Dictionary<string, object>();
-
-            for (var i = 0; i < invokeParameters.Length; i++)
+            if (invokeFilters.Any())
             {
-                parameters.Add(parameterNames.ToArray<string>()[i], invokeParameters[i]);
-            }
+                var parameters = new Dictionary<string, object>();
 
-            if (invokeFilters != null)
-            {
+                for (var i = 0; i < invokeParameters.Length; i++)
+                {
+                    parameters.Add(parameterNames[i], invokeParameters[i]);
+                }
+
                 foreach (var filter in invokeFilters)
                 {
                     try

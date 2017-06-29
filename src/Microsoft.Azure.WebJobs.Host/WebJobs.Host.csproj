@@ -546,7 +546,6 @@
     <Compile Include="DefaultNameResolver.cs" />
     <Compile Include="Diagnostics\ExceptionFormatter.cs" />
     <Compile Include="Executors\CompositeFunctionEventCollector.cs" />
-    <Compile Include="Executors\IJobMethodInvoker.cs" />
     <Compile Include="FunctionInvocationContext.cs" />
     <Compile Include="FunctionExecutingContext.cs" />
     <Compile Include="FunctionExecutedContext.cs" />
@@ -559,6 +558,7 @@
     <Compile Include="FuncConverter.cs" />
     <Compile Include="FunctionTimeoutException.cs" />
     <Compile Include="Exceptions\RecoverableException.cs" />
+    <Compile Include="IFunctionInvocationFilter.cs" />
     <Compile Include="InvocationFilterAttribute.cs" />
     <Compile Include="InvokeFunctionFilterAttribute.cs" />
     <Compile Include="JobHostBlobsConfiguration.cs" />

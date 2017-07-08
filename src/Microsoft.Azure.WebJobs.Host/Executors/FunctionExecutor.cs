@@ -570,9 +570,6 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             //      a. If throwOnTimeout, we throw the FunctionTimeoutException.
             //      b. If !throwOnTimeout, wait for the task to complete.
 
-            await InvokeExecutingFilters(invoker, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, parameterNames);
-            Dictionary<string, IFunctionInvocationFilter[]> sortedFilters = SortFilters();
-
             // Start the invokeTask.
             Task invokeTask = invoker.InvokeAsync(invokeParameters);
 
@@ -587,11 +584,15 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             {
                 await TryHandleTimeoutAsync(invokeTask, CancellationToken.None, throwOnTimeout, timeoutTokenSource.Token, timerInterval, instance, null);
             }
-
+            
+            // Get the list of filters to invoke if there are any
+            List<IFunctionInvocationFilter> filters = new List<IFunctionInvocationFilter>();
             FunctionResult functionResult = null;
+            filters = GetFilters(instance, invoker);
 
             try
             {
+                await InvokeExecutingFilters(filters, parameterNames, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config);
                 await invokeTask;
                 functionResult = new FunctionResult(true);
             }
@@ -602,26 +603,35 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             }
             finally
             {
-                await InvokeExecutedFilters(invoker, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, functionResult, parameterNames);
+                await InvokeExecutedFilters(filters, parameterNames, invokeParameters, functionCancellationTokenSource, instance, logger, jobHost, config, functionResult);
             }
         }
 
-        private static Dictionary<string, IFunctionInvocationFilter[]> SortFilters()
+        private static List<IFunctionInvocationFilter> GetFilters(IFunctionInstance instance, IFunctionInvoker invoker)
         {
-            IFunctionInvocationFilter[] executingFilters = null;
-            IFunctionInvocationFilter[] executedFilters = null;
+            List<IFunctionInvocationFilter> filters = new List<IFunctionInvocationFilter>();
 
-            // TODO: Add filter sorting
-
-            return new Dictionary<string, IFunctionInvocationFilter[]>()
+            if (invoker.Instance != null)
             {
-                { "executingFilters", executingFilters },
-                { "executedFilters", executedFilters }
-            };
+                var instanceFilter = invoker.Instance as IFunctionInvocationFilter;
+
+                if (instanceFilter != null)
+                {
+                    filters.Add(instanceFilter);
+                }
+            }
+
+            var methodFilters = instance.FunctionDescriptor.Method.GetCustomAttributes().OfType<IFunctionInvocationFilter>();
+            filters.AddRange(methodFilters);
+
+            var classFilters = instance.FunctionDescriptor.Method.DeclaringType.GetCustomAttributes().OfType<IFunctionInvocationFilter>();
+            filters.AddRange(classFilters);
+
+            return filters;
         }
 
-        private static async Task InvokeExecutingFilters(IFunctionInvoker invoker, object[] invokeParameters, CancellationTokenSource functionCancellationTokenSource,
-            IFunctionInstance instance, ILogger logger, JobHost jobHost, JobHostConfiguration config, IReadOnlyList<string> parameterNames)
+        private static async Task InvokeExecutingFilters(List<IFunctionInvocationFilter> filters, IReadOnlyList<string> invokeParameterNames, object[] invokeParameters, CancellationTokenSource functionCancellationTokenSource,
+            IFunctionInstance instance, ILogger logger, JobHost jobHost, JobHostConfiguration config)
         {
             MethodInfo functionMethod = instance.FunctionDescriptor.Method;
             CancellationToken cancellationToken = functionCancellationTokenSource.Token;
@@ -636,69 +646,45 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
 
             if (invokeFilters != null)
             {
+                // Create the context
+                FunctionExecutingContext context = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger);
+                context.JobHost = jobHost;
+                context.Config = config;
+
                 foreach (var filter in invokeFilters)
                 {
-                    try
-                    {
-                        if (filter.GetType() == typeof(InvokeFunctionFilterAttribute))
-                        {
-                            InvokeFunctionFilterAttribute invokeFunctionFilter = (InvokeFunctionFilterAttribute)filter;
-                            FunctionExecutingContext context = new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger);
-                            context.JobHost = jobHost;
-                            context.Config = config;
-                            await invokeFunctionFilter.OnExecutingAsync(context, cancellationToken);
-                        }
-                        else
-                        {
-                            await filter.OnExecutingAsync(new FunctionExecutingContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger), cancellationToken);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e.ToDetails());
-                    }
+                    await filter.OnExecutingAsync(context, functionCancellationTokenSource.Token);
                 }
             }
         }
 
-        private static async Task InvokeExecutedFilters(IFunctionInvoker invoker, object[] invokeParameters, CancellationTokenSource functionCancellationTokenSource,
-            IFunctionInstance instance, ILogger logger, JobHost jobHost, JobHostConfiguration config,
-            FunctionResult functionResult, IReadOnlyList<string> parameterNames)
+        private static async Task InvokeExecutedFilters(List<IFunctionInvocationFilter> filters, IReadOnlyList<string> invokeParameterNames, object[] invokeParameters, CancellationTokenSource functionCancellationTokenSource,
+            IFunctionInstance instance, ILogger logger, JobHost jobHost, JobHostConfiguration config, FunctionResult functionResult)
         {
-            MethodInfo functionMethod = instance.FunctionDescriptor.Method;
-            CancellationToken cancellationToken = functionCancellationTokenSource.Token;
-            var invokeFilters = functionMethod.GetCustomAttributes().OfType<InvocationFilterAttribute>();
+            if (filters.Any())
+            {
+                // Setup the parameters
+                var parameters = new Dictionary<string, object>();
 
             if (invokeFilters.Any())
             {
-                var parameters = new Dictionary<string, object>();
-
-                for (var i = 0; i < invokeParameters.Length; i++)
-                {
-                    parameters.Add(parameterNames[i], invokeParameters[i]);
-                }
+                // Create the context
+                FunctionExecutedContext context = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, functionResult);
+                context.JobHost = jobHost;
+                context.Config = config;
 
                 foreach (var filter in invokeFilters)
+                    {
+
+                    }
+
+                // Create the context
+                FunctionExecutedContext context = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, functionResult);
+                context.JobHost = jobHost;
+                context.Config = config;
+
                 {
-                    try
-                    {
-                        if (filter.GetType() == typeof(InvokeFunctionFilterAttribute))
-                        {
-                            InvokeFunctionFilterAttribute invokeFunctionFilter = (InvokeFunctionFilterAttribute)filter;
-                            FunctionExecutedContext context = new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, functionResult);
-                            context.JobHost = jobHost;
-                            context.Config = config;
-                            await invokeFunctionFilter.OnExecutedAsync(context, cancellationToken);
-                        }
-                        else
-                        {
-                            await filter.OnExecutedAsync(new FunctionExecutedContext(instance.Id, instance.FunctionDescriptor.FullName, parameters, logger, functionResult), cancellationToken);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        logger.LogError(e.ToDetails());
-                    }
+                    await filter.OnExecutedAsync(context, functionCancellationTokenSource.Token);
                 }
             }
         }

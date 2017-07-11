@@ -13,7 +13,6 @@ using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs.Host.Bindings;
 using Microsoft.Azure.WebJobs.Host.Blobs;
 using Microsoft.Azure.WebJobs.Host.Config;
-using Microsoft.Azure.WebJobs.Host.Executors;
 using Microsoft.Azure.WebJobs.Host.Indexers;
 using Microsoft.Azure.WebJobs.Host.Listeners;
 using Microsoft.Azure.WebJobs.Host.Loggers;
@@ -30,16 +29,13 @@ using Microsoft.Azure.WebJobs.Host.Triggers;
 using Microsoft.Azure.WebJobs.Logging;
 using Microsoft.Extensions.Logging;
 
-namespace Microsoft.Azure.WebJobs.Host
+namespace Microsoft.Azure.WebJobs.Host.Executors
 {
-    /// <summary>
-    /// Extension methods for <see cref="JobHostConfiguration"/>
-    /// </summary>
-    public static class JobHostConfigurationExtensions
+    internal static class JobHostConfigurationExtensions
     {
         // Do full initialization (both static and runtime). 
         // This can be called multiple times on a config. 
-        internal static async Task<JobHostContext> CreateAndLogHostStartedAsync(
+        public static async Task<JobHostContext> CreateAndLogHostStartedAsync(
             this JobHostConfiguration config,
             JobHost host,
             CancellationToken shutdownToken,
@@ -58,7 +54,7 @@ namespace Microsoft.Azure.WebJobs.Host
         // and so this method should not need to be async. 
         // This can be called multiple times on a config, which is why it returns a new ServiceProviderWrapper
         // instead of modifying the config.
-        internal static ServiceProviderWrapper CreateStaticServices(this JobHostConfiguration config)
+        public static ServiceProviderWrapper CreateStaticServices(this JobHostConfiguration config)
         {
             var services = new ServiceProviderWrapper(config);
 

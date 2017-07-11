@@ -233,7 +233,13 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests
                 "LogCategoryFilter",
                 "LogCategories",
                 "LoggingKeys",
-                "ScopeKeys"
+                "ScopeKeys",
+                "FunctionExecutingContext",
+                "FunctionExecutedContext",
+                "FunctionInvocationContext",
+                "IFunctionInvocationFilter",
+                "InvocationFilterAttribute",
+                "InvokeFunctionFilterAttribute"
             };
 
             AssertPublicTypes(expected, assembly);

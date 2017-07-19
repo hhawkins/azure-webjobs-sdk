@@ -403,6 +403,8 @@ namespace Microsoft.Azure.WebJobs.Host.Indexers
                         
             descr.Parameters = parameters;
             descr.TriggerParameterDescriptor = parameters.OfType<TriggerParameterDescriptor>().FirstOrDefault();
+            descr.FilterAttributes = method.GetCustomAttributes().OfType<IFunctionInvocationFilter>();
+            descr.DeclaringFilterAttributes = method.DeclaringType.GetCustomAttributes().OfType<IFunctionInvocationFilter>();
 
             return descr;
         }

@@ -12,6 +12,7 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
         private readonly IReadOnlyList<string> _parameterNames;
         private readonly IFactory<TReflected> _instanceFactory;
         private readonly IMethodInvoker<TReflected, TReturnValue> _methodInvoker;
+        private TReflected _instance;
 
         public FunctionInvoker(
             IReadOnlyList<string> parameterNames,
@@ -48,16 +49,26 @@ namespace Microsoft.Azure.WebJobs.Host.Executors
             get { return _parameterNames; }
         }
 
+        public object Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = _instanceFactory.Create();
+                }
+                return _instance;
+            }
+        }
+
         public async Task<object> InvokeAsync(object[] arguments)
         {
             // Return a task immediately in case the method is not async.
             await Task.Yield();
 
-            TReflected instance = _instanceFactory.Create();
-
-            using (instance as IDisposable)
+            using (Instance as IDisposable)
             {
-                return await _methodInvoker.InvokeAsync(instance, arguments);
+                return await _methodInvoker.InvokeAsync((TReflected)Instance, arguments);
             }
         }
     }

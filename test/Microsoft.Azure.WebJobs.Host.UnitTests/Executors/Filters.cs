@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs.Host.TestCommon;
 using System.Collections.Generic;
+using Microsoft.Azure.WebJobs.Host.UnitTests.Common;
 
 namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
 {
@@ -19,11 +20,13 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
         public static StringBuilder _log = new StringBuilder();
 
         static string _throwAtPhase;
+        static Exception _lastError;
 
         public FilterTests()
         {
             _log.Clear();
             _throwAtPhase = null;
+            _lastError = null;
         }
 
         [Fact]
@@ -177,7 +180,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
         [Fact]
         public async Task InvokeMethods()
         {
-            var host = TestHelpers.NewJobHost<MyProg5>();
+            var host = TestHelpers.NewJobHost<MyProg5>(new BindingPathAttribute.Extension());
             host.Call("Main");
 
             var fullPipeline = "[Pre][body][Post]";
@@ -188,11 +191,11 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
         [Fact]
         public async Task ExplicitInvokeFilter()
         {
-            var host = TestHelpers.NewJobHost<MyProg5>();
+            var host = TestHelpers.NewJobHost<MyProg5>(new BindingPathAttribute.Extension());
 
             var filter = new FunctionExecutingContext()
             {
-                FunctionName = "foo"
+                FunctionName = "Main"
             };
             IDictionary<string, object> args = new Dictionary<string, object>
             {
@@ -205,10 +208,15 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
 
         public class MyProg5
         {
+            // The extra binding also tests that the Invocation attribute is going through the normal binding pipeline. 
             [FunctionName("Pre")]
             [NoAutomaticTrigger]
-            public void Method1(FunctionExecutingContext pre)
+            public void Method1(FunctionExecutingContext pre, [BindingPath] string name)
             {
+                // Name will bind to the current function, event when this is invoked by a filter
+                Assert.Equal("Pre", name);
+                Assert.Equal("MyProg5.Main", pre.FunctionName);
+
                 Act("Pre");
             }
 
@@ -223,6 +231,81 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
             public void Main()
             {
                 Act("body");
+            }
+        }
+
+        // Verify that all filters share the same instance of the property bag. 
+        // Verify the filters can access the arguments. 
+        [Fact]
+        public async Task TestPropertyBag()
+        {
+            var host = TestHelpers.NewJobHost<MyProg6>();
+            host.Call(nameof(MyProg6.Foo), new { myarg = MyProg6.ArgValue });
+
+            Assert.Equal("[Pre-Instance][Pre-M1][Post-M1][Post-Instance]", MyProg6._sb.ToString());
+
+        }
+
+        public class MyProg6 : IFunctionInvocationFilter
+        {
+            const string Key = "k";
+            public const string ArgValue = "x";
+
+            public static StringBuilder _sb = new StringBuilder();
+
+            public MyProg6()
+            {
+                _sb.Clear();
+            }
+
+            static void Append(FunctionInvocationContext context, string text)
+            {
+                var props = context.Properties;
+                object obj;
+                if (!props.TryGetValue(Key, out obj))
+                {
+                    obj = _sb;
+                    props[Key] = obj;
+                }                
+                var sb = (StringBuilder)obj;
+                sb.Append(text);
+            }
+
+            [NoAutomaticTrigger]
+            [MyFilter]
+            public void Foo(string myarg)
+            {
+            }
+
+            public Task OnExecutedAsync(FunctionExecutedContext executedContext, CancellationToken cancellationToken)
+            {
+                Append(executedContext, "[Post-Instance]");
+                Assert.Equal(ArgValue, executedContext.Arguments["myarg"]);
+                return Task.CompletedTask;
+            }
+
+            public Task OnExecutingAsync(FunctionExecutingContext executingContext, CancellationToken cancellationToken)
+            {
+                Append(executingContext, "[Pre-Instance]");
+                Assert.Equal(ArgValue, executingContext.Arguments["myarg"]);
+                return Task.CompletedTask;
+            }
+
+            class MyFilterAttribute : InvocationFilterAttribute
+            {
+                public override Task OnExecutedAsync(FunctionExecutedContext executedContext, CancellationToken cancellationToken)
+                {
+                    Append(executedContext, "[Post-M1]");
+                    Assert.Equal(ArgValue, executedContext.Arguments["myarg"]);
+                    return Task.CompletedTask;
+                }
+
+                public override Task OnExecutingAsync(FunctionExecutingContext executingContext, CancellationToken cancellationToken)
+                {
+                    Append(executingContext, "[Pre-M1]");
+                    Assert.Equal(ArgValue, executingContext.Arguments["myarg"]);
+                    return Task.CompletedTask;
+                }
             }
         }
 
@@ -244,6 +327,20 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
             }
             Assert.False(succeed); // Expected ,method to fail
         }
+                
+        static void Verify(FunctionExecutedContext context)
+        {
+            if (_lastError != null)
+            {
+                Assert.False(context.FunctionResult.Succeeded);
+                Assert.Equal(_lastError, context.FunctionResult.Exception);
+            }
+            else
+            {
+                Assert.True(context.FunctionResult.Succeeded);
+                Assert.Null(context.FunctionResult.Exception);
+            }            
+        }
 
         static void Act(string phase)
         {
@@ -253,7 +350,8 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
                 if (_throwAtPhase.Contains(phase))
                 {
                     _log.Append("-Throw!]");
-                    throw new Exception($"Throw at {phase}");
+                    _lastError = new Exception($"Throw at {phase}");
+                    throw _lastError;
                 }
             }
             _log.Append("]");
@@ -334,6 +432,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
 
             public Task OnExecutedAsync(FunctionExecutedContext executedContext, CancellationToken cancellationToken)
             {
+                Verify(executedContext);
                 Act("Post-Instance");
                 return Task.CompletedTask;
             }
@@ -366,6 +465,7 @@ namespace Microsoft.Azure.WebJobs.Host.UnitTests.Executors
 
             public override Task OnExecutedAsync(FunctionExecutedContext executedContext, CancellationToken cancellationToken)
             {
+                Verify(executedContext);
                 Act("Post_" + _id);
                 return base.OnExecutedAsync(executedContext, cancellationToken);
             }
